@@ -37,8 +37,9 @@ int main (int argc, char **argv)
 GET_KEY:
 	char c, *input, input_size = 0;
 	input = malloc(sizeof(char) * 128);
-	while (read(0, &c, 1) > 0 && input_size < 128)
+	while (read(0, &c, 1) > 0)
 	{
+		if (input_size > 128)
 		input[input_size] = c;
 		input_size ++;
 	}
