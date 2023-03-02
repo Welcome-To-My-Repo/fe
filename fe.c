@@ -67,7 +67,6 @@ INTERPRET:
 		case 8:
 		{
 			delete((CurX + OffX), (CurY + OffY));
-			left();
 			break;
 		}
 		case 127:
@@ -223,9 +222,10 @@ void insert (unsigned long long int x, unsigned long long int y, char c)
 void delete (unsigned long long int x, unsigned long long int y)
 {
 	if (Length == 0 || y >= Length) return;
-	if (Buffer[y].size == 0 || x >= Buffer[y].length) return;
+	if (x >= Buffer[y].length) return;
 	if ((Buffer[y].length == 0 && y > 0) || (x == 0 && y > 0))
 		concatenate(y - 1), up(), end();
+	else if (Buffer[y].length == 0) return;
 	if (x < Buffer[y].length - 1)
 		for (int i = x; i < Buffer[y].length - 1; i ++)
 			Buffer[y].contents[i] = Buffer[y].contents[i + 1];
