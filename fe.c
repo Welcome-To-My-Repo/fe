@@ -85,18 +85,19 @@ INTERPRET:
 		{
 			if (c < ' ') goto GET_KEY;
 			else insert((CurX + OffX), (CurY + OffY), c);
+			RenderLine();
 		}
 	}
 	else switch(c = input[size - 1])
 	{
 		case 'A': //up
-			up(); break;
+			up(); RenderScreen(); break;
 		case 'B': //down
-			down(); break;
+			down(); RenderScreen(); break;
 		case 'C': //right
-			right(); break;
+			right(); RenderLine(); break;
 		case 'D': //left
-			left(); break;
+			left(); RenderLine(); break;
 		default:
 		{}
 	}
@@ -190,7 +191,7 @@ void insert (unsigned long long int x, unsigned long long int y, char c)
 
 	if (c != 10) {
 	
-		if (Buffer[y].size = 0 || Buffer[y].size <= Buffer[y].length)
+		if (Buffer[y].size == 0 || Buffer[y].size <= Buffer[y].length)
 			Buffer[y].size += 80,
 			Buffer[y].contents = realloc(Buffer[y].contents, sizeof(char) * Buffer[y].size);
 
@@ -199,6 +200,8 @@ void insert (unsigned long long int x, unsigned long long int y, char c)
 				Buffer[y].contents[i] = Buffer[y].contents[i - 1];
 	
 		Buffer[y].contents[x] = c;
+		down();
+		RenderScreen();
 	}
 	else {
 		
@@ -243,7 +246,7 @@ void deleteright (unsigned long long int x, unsigned long long int y)
 	if (x < Buffer[y].length - 1)
 		delete(x + 1, y);
 	else 
-	concatenate(y)
+	concatenate(y);
 }
 void concatenate(unsigned long long int y)
 {
@@ -258,6 +261,7 @@ void concatenate(unsigned long long int y)
 			Buffer[i] = Buffer[i + 1];
 		Length --;
 		Buffer = realloc(Buffer, sizeof(Line) * Length);
+	}
 }
 void RenderScreen()
 {
