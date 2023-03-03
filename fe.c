@@ -15,12 +15,6 @@ struct winsize window;
 char *pathname;
 int Dirty = 0;
 unsigned long long int CurX = 0, CurY = 0, OffX = 0, OffY = 0;
-void up();	
-void down();
-void left();
-void right();
-void end();
-void start();
 typedef struct l {
 	unsigned long long int length;
 	unsigned long long int size;
@@ -28,97 +22,10 @@ typedef struct l {
 } Line;
 Line *Buffer;
 unsigned long long int Length = 0;
-void insert(unsigned long long int x, unsigned long long int y, char c);
-void delete(unsigned long long int x, unsigned long long int y);
-void deleteright(unsigned long long int x, unsigned long long int y);
-void concatenate(unsigned long long int y);
-void RenderScreen();
-void RenderLine();
-
-int main (int argc, char **argv)
-{
-	tcgetattr(0, &restore);
-	interface = restore;
-	interface.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
-	interface.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
-	interface.c_cflag &= ~(CSIZE | PARENB);
-	interface.c_cflag |= CS8;
-	interface.c_cc[VMIN] = 0;
-	interface.c_cc[VTIME] = 1;
-	tcsetattr(0, TCSANOW, &interface);
-	ioctl(1, TIOCGWINSZ, &window);
-
-	char input[128], size;
-GET_KEY:
-	size = 0;
-	for (int i = 0; i < 128; i ++) {
-		input[i] = 0;
-		read(0, &input[i], 1);
-		if (input[i] == 0) break;
-		size ++;
-	}
-	if (size == 0) goto GET_KEY;
-INTERPRET:
-	ioctl(1, TIOCGWINSZ, &window);
-	char c = 0; 
-	if (size == 1) switch(c = input[0])
-	{
-		case 27: goto QUIT;
-		case 8:
-		{
-			delete((CurX + OffX), (CurY + OffY));
-			break;
-		}
-		case 127:
-		{
-			deleteright((CurX + OffX), (CurY + OffY));
-			break;
-		}
-		case 10:
-		{
-			insert((CurX + OffX), (CurY + OffY), c);
-			down();
-			start();
-			break;
-		}
-		default:
-		{
-			if (c < ' ') goto GET_KEY;
-			else insert((CurX + OffX), (CurY + OffY), c);
-			RenderLine();
-		}
-	}
-	else switch(c = input[size - 1])
-	{
-		case 'A': //up
-			up(); RenderScreen(); break;
-		case 'B': //down
-			down(); RenderScreen(); break;
-		case 'C': //right
-			right(); RenderLine(); break;
-		case 'D': //left
-			left(); RenderLine(); break;
-		default:
-		{}
-	}
-	goto GET_KEY;
-
-QUIT:
-	if (Dirty)
-	{
-		write(1, "Unsaved Changes!", sizeof("Unsaved Changes!"));
-	}
-
-	
-EXIT:
-	write(1, "\n", 1);
-	tcsetattr(0, TCSANOW, &restore);
-	exit(0);
-	return 0;
-}
 
 void up()
 {
+	if (Length == 0) return;
 	if (CurY > 0) CurY --, RenderScreen();
 	else if (OffY > 0) OffY --, RenderScreen();
 	else {
@@ -128,6 +35,7 @@ void up()
 }
 void down()
 {
+	if (Length == 0) return;
 	if (CurY + OffY < Length)
 	{
 		if (CurY < window.ws_row) CurY ++;
@@ -140,8 +48,20 @@ void down()
 		OffY = 0;
 	}
 }
+void left()
+{
+	if (Length == 0) return;
+	if (CurX > 0) CurX--, RenderLine();
+	else if (OffX > 0) OffX--, RenderLine();
+	else {
+		up();
+		end();
+		RenderScreen();
+	}
+}
 void right()
 {
+	if (Length == 0) return;
 	if (CurX + OffX > Buffer[CurY + OffY].length)
 	{
 		if (CurX < window.ws_col) CurX++;
@@ -155,109 +75,88 @@ void right()
 		RenderScreen();
 	}
 }
-void left()
-{
-	if (CurX > 0) CurX--, RenderLine();
-	else if (OffX > 0) OffX--, RenderLine();
-	else {
-		up();
-		end();
-		RenderScreen();
-	}
-}
-void end()
-{
-	CurX = window.ws_col - 1;
-	OffX = Buffer[CurY + OffY].length - CurX;
-}
-void start()
-{
-	CurX = 0;
-	OffX = 0;
-}
-void insert (unsigned long long int x, unsigned long long int y, char c)
-{
-	if (Length == 0)	
-		Buffer = malloc(sizeof(Line)),
-		Buffer[0].length = 0,
-		Buffer[0].size = 0,
-		Buffer[0].contents = 0;
-	
-	if (y >= Length) return;
 
-	Buffer[y].length ++;
-	
-	if (x >= Buffer[y].length) return;
-
-	if (c != 10) {
-	
-		if (Buffer[y].size == 0 || Buffer[y].size <= Buffer[y].length)
-			Buffer[y].size += 80,
-			Buffer[y].contents = realloc(Buffer[y].contents, sizeof(char) * Buffer[y].size);
-
-		if (x < Buffer[y].length)
-			for (int i = Buffer[y].length - 1; i > x; i --)
-				Buffer[y].contents[i] = Buffer[y].contents[i - 1];
-	
-		Buffer[y].contents[x] = c;
-		down();
-		RenderScreen();
+void insert(char c)
+{
+	unsigned long long int x = CurX + OffX, y = CurY + OffY;
+	if (Length == 0) 
+		Buffer = malloc(sizeof(Line)), 
+		Buffer[0].length = 1,
+		Buffer[0].size = 80,
+		Buffer[0].contents = malloc(sizeof(char) * Buffer[0].size),
+		Buffer[0].contents[0] = c,
+		OffX = 0, OffY = 0, CurX = 0, CurY = 0;
+	else if (c != '\n'){
+		Line *b = Buffer[y];
+		b.length ++;
+		if (!(b.size > b.length)) b.size += 80, b.contents = realloc(b.contents, sizeof(char) * b.size);
+		if (x < b.length - 1) 
+			for (int i = b.length - 1; i > x; i --)
+				b.contents[i] = b.contents[i - 1]; 
+		b.contents[x] = c;
 	}
 	else {
-		
-		Length++;
+		Length ++;
 		Buffer = realloc(Buffer, sizeof(Line) * Length);
-		if (y < Length - 1)
-			for (int i = Length - 1; i > y; i --)
+		if (y < Length - 2)
+			for (int i = Length - 1; i > y + 1; i --)
 				Buffer[i] = Buffer[i - 1];
-		Buffer[y + 1].length = 0, Buffer[y + 1].size = 0, Buffer[y + 1].contents = 0;
-		if (x < Buffer[y].length) {
-			while(Buffer[y + 1].size < (Buffer[y].length - x)) Buffer[y + 1].size += 80;
-			Buffer[y + 1].contents = malloc(sizeof(char) * Buffer[y + 1].size);
-			for (int i = x; i < Buffer[y].length; i++)
-				Buffer[y + 1].contents[i] = Buffer[y].contents[i], 
-				Buffer[y + 1].length ++;
-		}
+		Buffer[y + 1].size = Buffer[y].size;
+		Buffer[y + 1].contents = malloc(sizeof(char) * Buffer[y + 1].size);
+		Buffer[y + 1].length = 0;
+		for (int i = x; i < Buffer[y].length; i ++)
+			Buffer[y + 1].contents[i] = Buffer[y].contents[i], Buffer[y + 1].length ++;
+		CurX = 0, OffX = 0;
+		if (CurY < window.ws_row) CurY ++;
+		else OffY ++;
 	}
-	return;
 }
-
-void delete (unsigned long long int x, unsigned long long int y)
+void erase() //backspace
 {
-	if (Length == 0 || y >= Length) return;
-	if (x >= Buffer[y].length) return;
-	if ((Buffer[y].length == 0 && y > 0) || (x == 0 && y > 0))
-		concatenate(y - 1), up(), end();
-	else if (Buffer[y].length == 0) return;
-	if (x < Buffer[y].length - 1)
-		for (int i = x; i < Buffer[y].length - 1; i ++)
+	unsigned long long int x = OffX + CurX, y = OffY + CurY;
+	if (x > 0)
+	{
+		Buffer[y].length --;
+		for (int i = x - 1; i < Buffer[y].length - 1; i ++)
 			Buffer[y].contents[i] = Buffer[y].contents[i + 1];
-	Buffer[y].length --;
-	if (Buffer[y].size > (Buffer[y].length + 160))
-		Buffer[y].size -= 80,
-		Buffer[y].contents = realloc(Buffer[y].contents, sizeof(char) * Buffer[y].size);
-	return;
+		if (Buffer[y].size > (Buffer.length + 80))
+			Buffer.size -= 80, Buffer.contents = realloc(Buffer[y].contents, sizeof(char) * Buffer[y].size);
+		if (CurX > 0) CurX --;
+		else OffX --;
+	}
+	else if (y > 0)
+	{
+		//concatenate the current line with the line before it
+		Buffer[y - 1].size += Buffer[y].size;
+		Buffer[y - 1].contents = realloc(Buffer[y - 1].contents, sizeof(char) * Buffer[y - 1].size);
+		for (int i = 0; i < Buffer[y].length; i ++)
+			Buffer[y - 1].contents[Buffer[y - 1].length + i] = Buffer[y].contents[i];
+		Buffer[y - 1].length += Buffer[y].length;
+		free(Buffer[y].contents);
+		for (int i = y; i < Length - 1; i ++)
+			Buffer[i] = Buffer[i + 1];
+		Length --;
+		Buffer = realloc(Buffer, sizeof(Line) * Length);
+	}
 }
-
-void deleteright (unsigned long long int x, unsigned long long int y)
+void delete();
 {
-	if (Length == 0 || y >= Length) return;
-	if (x >= Buffer[y].length) return;
-	if (x < Buffer[y].length - 1)
-		delete(x + 1, y);
-	else 
-	concatenate(y);
-}
-void concatenate(unsigned long long int y)
-{
-	if (y < Length - 1)
+	unsigned long long int x = OffX + CurX, y = OffY + CurY;
+	if (x < Buffer[y].length)
+	{
+		if (CurX < window.ws_col) CurX ++;
+		else OffX ++;
+		erase();
+	}
+	else if (y < Length - 1)
 	{
 		Buffer[y].size += Buffer[y + 1].size;
 		Buffer[y].contents = realloc(Buffer[y].contents, sizeof(char) * Buffer[y].size);
-		Buffer[y].length += Buffer[y + 1].length;
-		for(int i = 0; i < Buffer[y + 1].length; i ++)
+		for (int i = 0; i < Buffer[y + 1].length; i ++)
 			Buffer[y].contents[Buffer[y].length + i] = Buffer[y + 1].contents[i];
-		for (int i = y; i < Length - 1; i ++)
+		Buffer[y].length += Buffer[y + 1].length;
+		free(Buffer[y + 1].contents);
+		for (int i = y + 1; i < Length - 1; i ++)
 			Buffer[i] = Buffer[i + 1];
 		Length --;
 		Buffer = realloc(Buffer, sizeof(Line) * Length);
@@ -265,67 +164,71 @@ void concatenate(unsigned long long int y)
 }
 void RenderScreen()
 {
-	char *out = malloc(sizeof(char) * window.ws_row * window.ws_col);
-	unsigned long long int out_length = 0;
-
-	write(1, "\x1b[3J\x1b[;H", 8);
-
-	for (int i = OffY; i < Length; i ++)
+	char *out = malloc((sizeof(char) * window.ws_col * window.ws_col) + (sizeof(char) * window.ws_row));
+	unsigned long long int pos = 0, t = 0;
+	for (int i = 0; i < Length; i ++, t = 0)
 	{
-		if ((i - OffY) == CurY)
-		{
-			if (CurX + OffX < Buffer[i].length)
-				for (int j = OffX; j < Buffer[i].length && j < (window.ws_col + OffX); j++)
-				{
-					if (Buffer[i].contents[j] == '\t')
-						for (int k = 0; k < 8; k ++)
-							out[out_length] = ' ', out_length++, j++;
-					else
-						out[out_length] = Buffer[i].contents[j], out_length++;
-				}
-			else
-			{
-				if (Buffer[i].length < window.ws_col)
-				{
-					for (int j = 0; j < Buffer[i].length; j ++)
-						out[out_length] = Buffer[i].contents[j], out_length++;
-				}
-				else
-				{
-					for(int j = Buffer[i].length - window.ws_col; j < Buffer[i].length; j++)
-						out[out_length] = Buffer[i].contents[j], out_length++;
-				}
-			}
-		}
-		else
-		{
-			for (int j = 0; j < Buffer[i].length && j < window.ws_col; j ++)
-			{
-				if (Buffer[i].contents[j] == '\t')
-					for(int k = 0; k < 8; k ++)
-						out[out_length] = ' ', out_length++;
-				else 
-					out[out_length] = Buffer[i].contents[j], out_length++;
-			}
-		}
-		out[out_length] = '\n';
+		/*
+			how to render tabs?
+			tabs are columns divisible by 8
+			so you hit a tab, then you append spaces until a column that's divisible
+			but then the cursor may be out of alignment because it's couting offset by characters
+		*/
 	}
-	write(1, out, out_length);
-	free(out);
-	return;
 }
 
-void RenderLine()
+int main (int argc, char **argv)
 {
-	write(1, "\r\x1b[2K", 5);
-	char *out = malloc(sizeof(char) * window.ws_col + (OffX * 3) + 1);
-	unsigned long long int out_length;
-	for (int i = OffX; i < Buffer[OffY + CurY].length && i < window.ws_col + OffX; i ++)
-		out[out_length] = Buffer[OffY + CurY].contents[i], out_length++;
-	out[out_length] = '\r', out_length++;
-	for (int i = 0; i < OffX; i += 3)
-		out[out_length] = '\x1b', out_length++,
-		out[out_length] = '[', out_length++,
-		out[out_length] = 'C', out_length++;
-	write(1, out, out_length);
+	tcgetattr(0, &restore);
+	interface = restore;
+	interface.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+	interface.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+	interface.c_cflag &= ~(CSIZE | PARENB);
+	interface.c_cflag |= CS8;
+	interface.c_cc[VMIN] = 0;
+	interface.c_cc[VTIME] = 1;
+	tcsetattr(0, TCSANOW, &interface);
+	char c;
+	char input[64], count;
+GET_KEY:
+	ioctl(1, TIOCGWINSZ, &window);
+	input[0] = 0;
+	read(1, input, 64);
+	if (input[0] != 0) switch(c = input[0])
+	{
+		case 27 :
+		{
+			if (input[1] == '[')
+			switch(input[2])
+			{
+				case 'A': up(); break;
+				case 'B': down(); break;
+				case 'C': right(); break;
+				case 'D': left(); break;
+			}
+			else goto QUIT;
+			break;
+		}
+		default:
+			if (!(c < ' '))
+				insert(c);
+			Dirty = 1;
+	}
+	for (int i = 0; i < 64; i ++)
+		input[i] = 0;
+	goto GET_KEY;
+
+
+QUIT:
+	if (Dirty)
+	{
+		write(1, "Unsaved Changes!", sizeof("Unsaved Changes!"));
+	}
+
+	
+EXIT:
+	write(1, "\n", 1);
+	tcsetattr(0, TCSANOW, &restore);
+	exit(0);
+	return 0;
 }
