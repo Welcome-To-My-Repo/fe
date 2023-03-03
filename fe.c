@@ -14,7 +14,7 @@ struct winsize window;
 
 char *pathname;
 int Dirty = 0;
-unsigned long long int CurX = 0, CurY = 0, OffX = 0, OffY = 0;
+unsigned long long int X = 0, Y = 0, wX = 0, wY = 0;
 typedef struct l {
 	unsigned long long int length;
 	unsigned long long int size;
@@ -22,41 +22,52 @@ typedef struct l {
 } Line;
 Line *Buffer;
 unsigned long long int Length = 0;
-
+end()
+{
+	if (Length == 0) return;
+	X = Buffer[Y].length - 1;
+	if (wX + window.ws_col < X) wX = X - window.ws_col;
+}
+start()
+{
+	X = 0;
+	wX = 0;
+}
 void up()
 {
 	if (Length == 0) return;
-	if (CurY > 0) CurY --, RenderScreen();
-	else if (OffY > 0) OffY --, RenderScreen();
+	if (Y > 0) {
+		Y --;
+		if (!(wY < Y)) wY = Y;
 	else {
-		CurY = window.ws_row - 1;
-		OffY = Length - CurY;
+		Y = Length - 1;
+		wY = Y - window.ws_row;
 	}
+	if (!(X < Buffer[Y].length)) end();
 }
 void down()
 {
 	if (Length == 0) return;
-	if (CurY + OffY < Length)
-	{
-		if (CurY < window.ws_row) CurY ++;
-		else OffY ++;
-		RenderScreen();
+	if (Y < Length - 1) {
+		Y ++;
+		if (wY + window.ws_row < Y) wY ++;
 	}
-	else
-	{
-		CurY = 0;
-		OffY = 0;
+	else {
+		Y = 0;
+		wY = 0;
 	}
+	if (!(X < Buffer[Y].length)) end();
 }
 void left()
 {
 	if (Length == 0) return;
-	if (CurX > 0) CurX--, RenderLine();
-	else if (OffX > 0) OffX--, RenderLine();
+	if (X > 0) {
+		X --;
+		if (wX > X) wX --;
+	}
 	else {
 		up();
 		end();
-		RenderScreen();
 	}
 }
 void right()
@@ -66,13 +77,10 @@ void right()
 	{
 		if (CurX < window.ws_col) CurX++;
 		else OffX ++;
-		RenderLine();
 	}
 	else
 	{
 		down();
-		start();
-		RenderScreen();
 	}
 }
 
@@ -87,13 +95,12 @@ void insert(char c)
 		Buffer[0].contents[0] = c,
 		OffX = 0, OffY = 0, CurX = 0, CurY = 0;
 	else if (c != '\n'){
-		Line *b = Buffer[y];
-		b.length ++;
-		if (!(b.size > b.length)) b.size += 80, b.contents = realloc(b.contents, sizeof(char) * b.size);
-		if (x < b.length - 1) 
-			for (int i = b.length - 1; i > x; i --)
-				b.contents[i] = b.contents[i - 1]; 
-		b.contents[x] = c;
+		Buffer[y].length ++;
+		if (!(Buffer[y].size > Buffer[y].length)) Buffer[y].size += 80, Buffer[y].contents = realloc(Buffer[y].contents, sizeof(char) * Buffer[y].size);
+		if (x < Buffer[y].length - 1) 
+			for (int i = Buffer[y].length - 1; i > x; i --)
+				Buffer[y].contents[i] = Buffer[y].contents[i - 1]; 
+		Buffer[y].contents[x] = c;
 	}
 	else {
 		Length ++;
@@ -119,8 +126,8 @@ void erase() //backspace
 		Buffer[y].length --;
 		for (int i = x - 1; i < Buffer[y].length - 1; i ++)
 			Buffer[y].contents[i] = Buffer[y].contents[i + 1];
-		if (Buffer[y].size > (Buffer.length + 80))
-			Buffer.size -= 80, Buffer.contents = realloc(Buffer[y].contents, sizeof(char) * Buffer[y].size);
+		if (Buffer[y].size > (Buffer[y].length + 80))
+			Buffer[y].size -= 80, Buffer[y].contents = realloc(Buffer[y].contents, sizeof(char) * Buffer[y].size);
 		if (CurX > 0) CurX --;
 		else OffX --;
 	}
@@ -139,7 +146,7 @@ void erase() //backspace
 		Buffer = realloc(Buffer, sizeof(Line) * Length);
 	}
 }
-void delete();
+void delete()
 {
 	unsigned long long int x = OffX + CurX, y = OffY + CurY;
 	if (x < Buffer[y].length)
@@ -164,17 +171,7 @@ void delete();
 }
 void RenderScreen()
 {
-	char *out = malloc((sizeof(char) * window.ws_col * window.ws_col) + (sizeof(char) * window.ws_row));
-	unsigned long long int pos = 0, t = 0;
-	for (int i = 0; i < Length; i ++, t = 0)
-	{
-		/*
-			how to render tabs?
-			tabs are columns divisible by 8
-			so you hit a tab, then you append spaces until a column that's divisible
-			but then the cursor may be out of alignment because it's couting offset by characters
-		*/
-	}
+
 }
 
 int main (int argc, char **argv)
