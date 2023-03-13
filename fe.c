@@ -23,16 +23,6 @@ typedef struct l {
 Line *Buffer;
 unsigned long long int Length = 0;
 
-void Insert(char c);
-void Erase();
-void Delete();
-void Up();
-void Down();
-void Right();
-void Left();
-void Start();
-void End();
-
 int main (int argc, char **argv)
 {
 	tcgetattr(0, &restore);
@@ -57,10 +47,28 @@ GET_KEY:
 			if (input[1] == '[')
 			switch(input[2])
 			{
-				case 'A': Up(); break;
-				case 'B': Down(); break;
-				case 'C': Right(); break;
-				case 'D': Left(); break;
+				case 'A': { //up
+					if (Y > 0) 
+					{
+						y--;
+						if (wY > Y) xY --;
+					}
+					else
+					{
+						Y = Length - 1;
+					}
+				} 
+				break;
+				case 'B': { //down
+					if 
+				}
+				break;
+				case 'C': { //right
+				}
+				break;
+				case 'D': { //left
+				}
+				break;
 			}
 			else goto QUIT;
 			break;
